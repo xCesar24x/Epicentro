@@ -141,7 +141,7 @@ const KINGDOM_OF_GOD = {
   ]
 };
 
-// --- COMPONENTE 3D CON DETALLE MUSCULAR ESCULPIDO ---
+// --- COMPONENTE 3D CON METALES PBR Y HDRI ---
 const StatueModel = ({ 
   selectedId, 
   setSelectedId, 
@@ -159,29 +159,29 @@ const StatueModel = ({
   useFrame((state) => {
     if (selectedId !== null && !collapsed) {
       const targetY = SECTIONS_DATA[selectedId].yPos;
-      state.camera.position.lerp(new THREE.Vector3(0, targetY + 0.5, 5), 0.05);
+      state.camera.position.lerp(new THREE.Vector3(0, targetY + 1.5, 6), 0.05);
       controlsRef.current.target.lerp(new THREE.Vector3(0, targetY, 0), 0.05);
     } else if (stoneActive) {
       // Zoom out dramático para ver el impacto
-      state.camera.position.lerp(new THREE.Vector3(0, 0.5, 7.5), 0.04);
-      controlsRef.current.target.lerp(new THREE.Vector3(0, -0.5, 0), 0.04);
+      state.camera.position.lerp(new THREE.Vector3(0, 1.0, 9), 0.04);
+      controlsRef.current.target.lerp(new THREE.Vector3(0, -1.0, 0), 0.04);
     } else {
       // Vista inicial amplia
-      state.camera.position.lerp(new THREE.Vector3(0, 1.2, 8.5), 0.05);
+      state.camera.position.lerp(new THREE.Vector3(0, 1.5, 9), 0.05);
       controlsRef.current.target.lerp(new THREE.Vector3(0, 0.5, 0), 0.05);
     }
   });
 
-  // Generación de texturas procedimentales para los metales
-  const createMetalMaterialProps = (section, isHovered) => {
-    return {
-      color: section.color,
-      roughness: section.rough,
-      metalness: section.metalness,
-      emissive: isHovered ? new THREE.Color(section.color).multiplyScalar(0.4) : new THREE.Color("#000000"),
-      emissiveIntensity: isHovered ? 0.8 : 0,
-    };
-  };
+  const createMaterial = (section, isHovered) => (
+    <meshStandardMaterial 
+      color={section.color}
+      roughness={section.rough}
+      metalness={section.metalness}
+      envMapIntensity={2.5}
+      emissive={isHovered ? section.color : "#000000"}
+      emissiveIntensity={isHovered ? 0.35 : 0}
+    />
+  );
 
   return (
     <>
@@ -189,256 +189,105 @@ const StatueModel = ({
         ref={controlsRef} 
         enablePan={false} 
         maxPolarAngle={Math.PI / 1.7} 
-        minDistance={2.5} 
-        maxDistance={12} 
+        minDistance={3} 
+        maxDistance={15} 
         enableDamping
         dampingFactor={0.05}
       />
       
-      {/* Iluminación dramática estilo estudio */}
-      <ambientLight intensity={0.15} />
-      <directionalLight position={[5, 8, 5]} intensity={1.8} castShadow shadow-mapSize={[1024, 1024]} />
-      <directionalLight position={[-5, 3, -5]} intensity={0.6} color="#7d87ff" />
-      <pointLight position={[0, -1.8, 2]} intensity={1.2} color="#ffd573" />
+      {/* Iluminación PBR HDRI Realista */}
+      <Environment preset="city" />
+      <ambientLight intensity={0.2} />
+      <directionalLight position={[10, 10, 5]} intensity={1.5} castShadow shadow-mapSize={[2048, 2048]} />
+      <spotLight position={[-5, 5, 5]} intensity={0.8} angle={0.5} penumbra={1} color="#a0b0ff" />
+      <pointLight position={[0, -2, 3]} intensity={1.5} color="#ffd573" distance={10} />
       
       {/* Grupo General de la Estatua */}
-      <group position={[0, 0.4, 0]}>
+      <group position={[0, -0.5, 0]}>
         
         {/* Pedestal de Piedra Gris */}
-        <mesh position={[0, -2.4, 0]} receiveShadow castShadow>
-          <cylinderGeometry args={[1.8, 1.95, 0.6, 12]} />
-          <meshStandardMaterial color="#47474f" roughness={0.95} metalness={0.1} />
+        <mesh position={[0, -2.6, 0]} receiveShadow castShadow>
+          <cylinderGeometry args={[2.2, 2.4, 0.8, 32]} />
+          <meshStandardMaterial color="#2d2d35" roughness={0.9} metalness={0.2} envMapIntensity={0.5} />
         </mesh>
 
-        {/* 5 Secciones de la Estatua */}
-        {SECTIONS_DATA.map((section, idx) => {
-          const isSelected = selectedId === section.id;
-          const isHovered = hovered === section.id;
-          const matProps = createMetalMaterialProps(section, isHovered);
+        <Float speed={2} rotationIntensity={0.05} floatIntensity={0.2}>
+          {/* 5 Secciones de la Estatua */}
+          {SECTIONS_DATA.map((section, idx) => {
+            const isSelected = selectedId === section.id;
+            const isHovered = hovered === section.id;
+            const offset = collapsed ? collapseOffsets[idx] : { pos: [0, 0, 0], rot: [0, 0, 0] };
 
-          // Si colapsó, aplicamos sus transformaciones dinámicas de gravedad
-          const offset = collapsed ? collapseOffsets[idx] : { pos: [0, 0, 0], rot: [0, 0, 0] };
-
-          return (
-            <group
-              key={section.id}
-              position={[offset.pos[0], section.yPos + offset.pos[1], offset.pos[2]]}
-              rotation={offset.rot}
-              onClick={(e) => { 
-                e.stopPropagation(); 
-                if (!collapsed && !stoneActive) setSelectedId(section.id); 
-              }}
-              onPointerOver={(e) => { 
-                e.stopPropagation(); 
-                if (!collapsed && !stoneActive) setHovered(section.id); 
-              }}
-              onPointerOut={() => setHovered(null)}
-              scale={isSelected ? 1.04 : 1}
-            >
-              {/* --- MODELO ESCULPIDO PROCEDIMENTAL --- */}
-              {section.id === 0 && (
-                /* 0. Cabeza (Oro) - Cabeza, Corona y Barba */
-                <group scale={[0.8, 0.8, 0.8]}>
-                  {/* Cabeza principal */}
-                  <mesh castShadow receiveShadow>
-                    <sphereGeometry args={[0.38, 32, 32]} />
-                    <meshStandardMaterial {...matProps} />
+            return (
+              <group
+                key={section.id}
+                position={[offset.pos[0], section.yPos + offset.pos[1], offset.pos[2]]}
+                rotation={offset.rot}
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  if (!collapsed && !stoneActive) setSelectedId(section.id); 
+                }}
+                onPointerOver={(e) => { 
+                  e.stopPropagation(); 
+                  if (!collapsed && !stoneActive) setHovered(section.id); 
+                }}
+                onPointerOut={() => setHovered(null)}
+              >
+                {/* Geometrías majestuosas y unificadas (Estilo Monolito/Obelisco Esculpido) */}
+                <mesh castShadow receiveShadow scale={isSelected ? 1.05 : 1}>
+                  {section.id === 0 && (
+                    // Cabeza: Corona Cilíndrica majestuosa
+                    <cylinderGeometry args={[0.45, 0.55, 1.0, 32]} />
+                  )}
+                  {section.id === 1 && (
+                    // Pecho: Torso ancho y robusto
+                    <cylinderGeometry args={[0.7, 0.65, 1.2, 32]} />
+                  )}
+                  {section.id === 2 && (
+                    // Vientre: Centro sólido
+                    <cylinderGeometry args={[0.65, 0.6, 1.0, 32]} />
+                  )}
+                  {section.id === 3 && (
+                    // Piernas: Base alta y fuerte
+                    <cylinderGeometry args={[0.6, 0.55, 1.8, 32]} />
+                  )}
+                  {section.id === 4 && (
+                    // Pies: Base terrenal ancha
+                    <cylinderGeometry args={[0.55, 0.65, 0.8, 32]} />
+                  )}
+                  {createMaterial(section, isHovered)}
+                </mesh>
+                
+                {/* Juntas metálicas decorativas entre secciones */}
+                {section.id !== 4 && (
+                  <mesh position={[0, - (section.id === 0 ? 0.5 : section.id === 1 ? 0.6 : section.id === 2 ? 0.5 : 0.9), 0]} castShadow>
+                    <torusGeometry args={[section.id === 0 ? 0.55 : section.id === 1 ? 0.65 : section.id === 2 ? 0.6 : 0.55, 0.04, 16, 32]} />
+                    <meshStandardMaterial color="#111" roughness={0.8} metalness={0.9} />
                   </mesh>
-                  {/* Corona / Casco Babilonio */}
-                  <mesh position={[0, 0.28, 0]} castShadow>
-                    <cylinderGeometry args={[0.1, 0.38, 0.3, 16]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  <mesh position={[0, 0.45, 0]}>
-                    <sphereGeometry args={[0.08, 16, 16]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Barba babilonia esculpida */}
-                  <mesh position={[0, -0.32, 0.2]} rotation={[0.2, 0, 0]} castShadow>
-                    <coneGeometry args={[0.18, 0.45, 4]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                </group>
-              )}
-
-              {section.id === 1 && (
-                /* 1. Pecho y Brazos (Plata) - Hombros, Brazos Musculosos, Pectorales */
-                <group scale={[0.88, 0.88, 0.88]}>
-                  {/* Pecho principal */}
-                  <mesh castShadow receiveShadow>
-                    <cylinderGeometry args={[0.62, 0.46, 1.1, 16]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Pectoral Izquierdo */}
-                  <mesh position={[-0.2, 0.2, 0.24]} scale={[1, 0.7, 0.7]}>
-                    <sphereGeometry args={[0.18, 16, 16]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Pectoral Derecho */}
-                  <mesh position={[0.2, 0.2, 0.24]} scale={[1, 0.7, 0.7]}>
-                    <sphereGeometry args={[0.18, 16, 16]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Deltoides Izquierdo */}
-                  <mesh position={[-0.72, 0.3, 0]} castShadow>
-                    <sphereGeometry args={[0.18, 16, 16]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Brazo Izquierdo (Bíceps) */}
-                  <mesh position={[-0.82, -0.1, 0]} rotation={[0, 0, 0.1]} castShadow>
-                    <cylinderGeometry args={[0.13, 0.11, 0.7, 16]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Antebrazo Izquierdo y Puño */}
-                  <mesh position={[-0.88, -0.52, 0.1]} rotation={[0.3, 0, 0.1]} castShadow>
-                    <cylinderGeometry args={[0.11, 0.09, 0.6, 16]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  <mesh position={[-0.92, -0.85, 0.18]}>
-                    <sphereGeometry args={[0.09, 12, 12]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Deltoides Derecho */}
-                  <mesh position={[0.72, 0.3, 0]} castShadow>
-                    <sphereGeometry args={[0.18, 16, 16]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Brazo Derecho (Bíceps) */}
-                  <mesh position={[0.82, -0.1, 0]} rotation={[0, 0, -0.1]} castShadow>
-                    <cylinderGeometry args={[0.13, 0.11, 0.7, 16]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Antebrazo Derecho y Puño */}
-                  <mesh position={[0.88, -0.52, 0.1]} rotation={[0.3, 0, -0.1]} castShadow>
-                    <cylinderGeometry args={[0.11, 0.09, 0.6, 16]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  <mesh position={[0.92, -0.85, 0.18]}>
-                    <sphereGeometry args={[0.09, 12, 12]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                </group>
-              )}
-
-              {section.id === 2 && (
-                /* 2. Vientre y Muslos (Bronce) - Abdominales, Cinturón, Falda Griega */
-                <group scale={[0.9, 0.9, 0.9]}>
-                  {/* Vientre */}
-                  <mesh castShadow receiveShadow>
-                    <cylinderGeometry args={[0.45, 0.5, 0.7, 16]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Detalle Abdominales esculpidos */}
-                  <mesh position={[0, 0.05, 0.22]} scale={[0.3, 0.4, 0.15]}>
-                    <boxGeometry />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Cinturón de Guerrero */}
-                  <mesh position={[0, -0.38, 0]} castShadow>
-                    <cylinderGeometry args={[0.53, 0.53, 0.15, 16]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Faldón Griego (Pteruges) */}
-                  <mesh position={[0, -0.65, 0]} castShadow>
-                    <cylinderGeometry args={[0.53, 0.58, 0.4, 16]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Muslos Musculosos */}
-                  <mesh position={[-0.24, -1.0, 0.02]} rotation={[0.05, 0, 0]} castShadow>
-                    <cylinderGeometry args={[0.22, 0.17, 0.6, 16]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  <mesh position={[0.24, -1.0, 0.02]} rotation={[0.05, 0, 0]} castShadow>
-                    <cylinderGeometry args={[0.22, 0.17, 0.6, 16]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                </group>
-              )}
-
-              {section.id === 3 && (
-                /* 3. Piernas (Hierro) - Rodillas y Pantorrillas */
-                <group scale={[0.92, 0.92, 0.92]}>
-                  {/* Pierna Izquierda */}
-                  <mesh position={[-0.24, 0, 0]} castShadow receiveShadow>
-                    <cylinderGeometry args={[0.16, 0.13, 1.4, 16]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Rodillera / Rodilla Izquierda */}
-                  <mesh position={[-0.24, 0.6, 0.1]}>
-                    <sphereGeometry args={[0.1, 12, 12]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Pierna Derecha */}
-                  <mesh position={[0.24, 0, 0]} castShadow receiveShadow>
-                    <cylinderGeometry args={[0.16, 0.13, 1.4, 16]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Rodillera / Rodilla Derecha */}
-                  <mesh position={[0.24, 0.6, 0.1]}>
-                    <sphereGeometry args={[0.1, 12, 12]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                </group>
-              )}
-
-              {section.id === 4 && (
-                /* 4. Pies (Hierro y Barro) - Detalle de dedos y tobillos */
-                <group scale={[0.92, 0.92, 0.92]}>
-                  {/* Tobillo Izquierdo */}
-                  <mesh position={[-0.24, 0.2, 0]} castShadow>
-                    <cylinderGeometry args={[0.13, 0.15, 0.5, 12]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Pie Izquierdo */}
-                  <mesh position={[-0.24, -0.15, 0.15]} castShadow>
-                    <boxGeometry args={[0.28, 0.25, 0.6]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Dedos del pie izquierdo */}
-                  <mesh position={[-0.24, -0.22, 0.45]} scale={[1, 0.6, 1]}>
-                    <boxGeometry args={[0.26, 0.1, 0.12]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-
-                  {/* Tobillo Derecho */}
-                  <mesh position={[0.24, 0.2, 0]} castShadow>
-                    <cylinderGeometry args={[0.13, 0.15, 0.5, 12]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Pie Derecho */}
-                  <mesh position={[0.24, -0.15, 0.15]} castShadow>
-                    <boxGeometry args={[0.28, 0.25, 0.6]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                  {/* Dedos del pie derecho */}
-                  <mesh position={[0.24, -0.22, 0.45]} scale={[1, 0.6, 1]}>
-                    <boxGeometry args={[0.26, 0.1, 0.12]} />
-                    <meshStandardMaterial {...matProps} />
-                  </mesh>
-                </group>
-              )}
-            </group>
-          );
-        })}
+                )}
+              </group>
+            );
+          })}
+        </Float>
 
         {/* --- PIEDRA GOLPEADORA --- */}
         {stoneActive && !collapsed && (
           <mesh 
             position={[
               0, 
-              THREE.MathUtils.lerp(8, -1.6, stoneProgress), 
-              THREE.MathUtils.lerp(4, 0.4, stoneProgress)
+              THREE.MathUtils.lerp(12, -1.8, stoneProgress), 
+              THREE.MathUtils.lerp(6, 0.8, stoneProgress)
             ]}
-            rotation={[stoneProgress * 15, stoneProgress * 20, 0]}
+            rotation={[stoneProgress * 20, stoneProgress * 25, 0]}
             castShadow
           >
-            <dodecahedronGeometry args={[0.48, 1]} />
-            <meshStandardMaterial color="#888894" roughness={0.9} metalness={0.1} />
+            <dodecahedronGeometry args={[0.6, 1]} />
+            <meshStandardMaterial color="#888894" roughness={0.8} metalness={0.3} envMapIntensity={1.0} />
           </mesh>
         )}
       </group>
 
-      <ContactShadows position={[0, -2.0, 0]} opacity={0.65} scale={8} blur={1.5} far={3.5} />
+      <ContactShadows position={[0, -2.5, 0]} opacity={0.8} scale={15} blur={2.5} far={4} color="#000000" />
     </>
   );
 };
@@ -468,42 +317,44 @@ export default function App() {
     if (stoneActive && !collapsed) {
       interval = setInterval(() => {
         setStoneProgress(prev => {
-          if (prev >= 1) {
+          // Incremento con curva de aceleración para simular gravedad real
+          const step = 0.015 + (prev * 0.03); 
+          if (prev + step >= 1) {
             clearInterval(interval);
             triggerCollapsePhysics();
             return 1;
           }
-          return prev + 0.035;
+          return prev + step;
         });
-      }, 25);
+      }, 16); // ~60fps
     }
     return () => clearInterval(interval);
   }, [stoneActive]);
 
-  // Animación de caída de fragmentos (física básica)
+  // Animación de caída de fragmentos (física básica y explosiva)
   useEffect(() => {
     let interval;
     if (collapsed) {
       const vels = SECTIONS_DATA.map((_, idx) => ({
         posVel: [
-          (Math.random() - 0.5) * 0.12,
-          (Math.random() * 0.08) + 0.05,
-          (Math.random() - 0.2) * 0.12
+          (Math.random() - 0.5) * 0.3, // Fuerza de explosión lateral
+          (Math.random() * 0.15) + 0.1, // Rebote hacia arriba
+          (Math.random() - 0.5) * 0.3  // Explosión en Z
         ],
         rotVel: [
-          (Math.random() - 0.5) * 0.06,
-          (Math.random() - 0.5) * 0.06,
-          (Math.random() - 0.5) * 0.06
+          (Math.random() - 0.5) * 0.15,
+          (Math.random() - 0.5) * 0.15,
+          (Math.random() - 0.5) * 0.15
         ]
       }));
 
       interval = setInterval(() => {
         setCollapseOffsets(prev => 
           prev.map((offset, idx) => {
-            if (offset.pos[1] < -3.0) return offset; // Llegó al suelo
+            if (offset.pos[1] < -4.0) return offset; // Llegó al suelo
             
             const vel = vels[idx];
-            vel.posVel[1] -= 0.008; // Gravedad
+            vel.posVel[1] -= 0.015; // Gravedad acelerada
             
             return {
               pos: [
@@ -519,7 +370,7 @@ export default function App() {
             };
           })
         );
-      }, 25);
+      }, 16);
     }
     return () => clearInterval(interval);
   }, [collapsed]);
@@ -529,7 +380,7 @@ export default function App() {
     setTimeout(() => {
       setShowFinalModal(true);
       setSelectedId(null);
-    }, 1200);
+    }, 1500);
   };
 
   const handleStoneTrigger = () => {
@@ -592,23 +443,23 @@ export default function App() {
   const activeData = selectedId !== null ? SECTIONS_DATA[selectedId] : null;
 
   return (
-    <div className="w-screen h-screen bg-gradient-to-br from-gray-950 via-[#0d0914] to-black text-gray-100 overflow-hidden relative font-sans select-none">
+    <div className="w-screen h-screen bg-gradient-to-br from-gray-950 via-[#0a0710] to-black text-gray-100 overflow-hidden relative font-sans select-none">
       
       {/* HEADER */}
       <header className="absolute top-0 left-0 w-full p-6 z-10 flex justify-between items-start pointer-events-none">
         <div className="pointer-events-auto">
-          <h1 className="text-2xl md:text-3xl font-extrabold text-gold tracking-widest font-serif drop-shadow-[0_0_12px_rgba(212,175,55,0.4)]">
+          <h1 className="text-2xl md:text-4xl font-extrabold text-gold tracking-widest font-serif drop-shadow-[0_0_15px_rgba(212,175,55,0.6)]">
             DANIEL 2
           </h1>
-          <p className="text-xs text-gray-400 font-medium tracking-widest mt-1 uppercase">
+          <p className="text-[10px] md:text-xs text-gray-400 font-medium tracking-widest mt-1 uppercase">
             Estatua Profética Multidimensional
           </p>
         </div>
         
-        <div className="flex gap-3 pointer-events-auto">
+        <div className="flex flex-col md:flex-row gap-3 pointer-events-auto">
           <button 
             onClick={startTour}
-            className="bg-gold/10 hover:bg-gold hover:text-black border border-gold/30 text-gold px-4 py-2 rounded font-serif text-sm transition-all duration-300 shadow-[0_0_15px_rgba(212,175,55,0.1)] flex items-center gap-2"
+            className="bg-black/40 hover:bg-gold hover:text-black border border-gold/40 text-gold px-4 py-2.5 rounded font-serif text-sm transition-all duration-300 shadow-[0_0_15px_rgba(212,175,55,0.15)] flex items-center justify-center gap-2 backdrop-blur-md"
           >
             <Play size={14} fill="currentColor" /> Tour Guiado
           </button>
@@ -616,14 +467,14 @@ export default function App() {
           {(collapsed || stoneActive) ? (
             <button 
               onClick={handleReset}
-              className="bg-red-500/10 hover:bg-red-500 hover:text-white border border-red-500/30 text-red-400 px-4 py-2 rounded text-sm font-semibold transition-all duration-300 flex items-center gap-2"
+              className="bg-black/40 hover:bg-red-500 hover:text-white border border-red-500/40 text-red-400 px-4 py-2.5 rounded text-sm font-semibold transition-all duration-300 flex items-center justify-center gap-2 backdrop-blur-md"
             >
               <RotateCcw size={14} /> Restaurar
             </button>
           ) : (
             <button 
               onClick={handleStoneTrigger}
-              className="bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded text-sm font-bold transition-all duration-300 shadow-lg shadow-red-950 flex items-center gap-2"
+              className="bg-red-600/90 hover:bg-red-500 text-white px-4 py-2.5 rounded text-sm font-bold transition-all duration-300 shadow-[0_0_20px_rgba(220,38,38,0.4)] flex items-center justify-center gap-2 border border-red-400/50 backdrop-blur-md"
             >
               <Activity size={14} /> Lanzar Piedra
             </button>
