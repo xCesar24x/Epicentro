@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, Suspense, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Environment, ContactShadows, Float, useCursor, Points, Point } from '@react-three/drei';
+import { OrbitControls, Environment, ContactShadows, Float, useCursor, useTexture } from '@react-three/drei';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Info, Play, X, RotateCcw, Shield, Compass, BookOpen, Clock, Activity } from 'lucide-react';
 import * as THREE from 'three';
@@ -13,10 +13,10 @@ const SECTIONS_DATA = [
     title: "Imperio de Babilonia",
     years: "605 – 539 a.C.",
     color: "#ffd700",
-    rough: 0.15,
-    metalness: 0.95,
-    yPos: 2.7,
-    scale: 0.85,
+    uvHeight: 0.15,
+    uvOffset: 0.85,
+    planeHeight: 0.90,
+    yPos: 2.55,
     biblical: "«Tú, rey, eres rey de reyes; porque el Dios del cielo te ha dado reino, poder, fuerza y majestad... tú eres aquella cabeza de oro.» (Daniel 2:37-38)",
     king: "Nabucodonosor II",
     capital: "Babilonia",
@@ -36,10 +36,10 @@ const SECTIONS_DATA = [
     title: "Imperio Medo-Persa",
     years: "539 – 331 a.C.",
     color: "#e3e3e3",
-    rough: 0.25,
-    metalness: 0.85,
-    yPos: 1.8,
-    scale: 1.0,
+    uvHeight: 0.25,
+    uvOffset: 0.60,
+    planeHeight: 1.50,
+    yPos: 1.35,
     biblical: "«Y después de ti se levantará otro reino inferior al tuyo;» (Daniel 2:39a)",
     king: "Ciro el Grande / Darío",
     capital: "Persépolis / Susa",
@@ -59,10 +59,10 @@ const SECTIONS_DATA = [
     title: "Imperio Griego",
     years: "331 – 168 a.C.",
     color: "#cd7f32",
-    rough: 0.35,
-    metalness: 0.75,
-    yPos: 0.8,
-    scale: 0.95,
+    uvHeight: 0.15,
+    uvOffset: 0.45,
+    planeHeight: 0.90,
+    yPos: 0.15,
     biblical: "«y luego un tercer reino de bronce, el cual dominará sobre toda la tierra.» (Daniel 2:39b)",
     king: "Alejandro Magno",
     capital: "Alejandría",
@@ -82,10 +82,10 @@ const SECTIONS_DATA = [
     title: "Imperio Romano",
     years: "168 a.C. – 476 d.C.",
     color: "#7a7a7a",
-    rough: 0.3,
-    metalness: 0.7,
-    yPos: -0.4,
-    scale: 0.95,
+    uvHeight: 0.33,
+    uvOffset: 0.12,
+    planeHeight: 1.98,
+    yPos: -1.29,
     biblical: "«Y el cuarto reino será fuerte como el hierro; y como el hierro desmenuza... así desmenuzará y quebrantará a todos.» (Daniel 2:40)",
     king: "Los Césares de Roma",
     capital: "Roma / Constantinopla",
@@ -105,10 +105,10 @@ const SECTIONS_DATA = [
     title: "Europa Dividida",
     years: "476 d.C. – Presente",
     color: "#8a7267",
-    rough: 0.75,
-    metalness: 0.35,
-    yPos: -1.5,
-    scale: 0.9,
+    uvHeight: 0.12,
+    uvOffset: 0.00,
+    planeHeight: 0.72,
+    yPos: -2.64,
     biblical: "«los pies y los dedos, en parte de barro cocido de alfarero y en parte de hierro, el reino será dividido... no se unirán el uno con el otro.» (Daniel 2:41-43)",
     king: "Monarquías / Gobiernos",
     capital: "Capitales Nacionales",
@@ -141,7 +141,7 @@ const KINGDOM_OF_GOD = {
   ]
 };
 
-// --- COMPONENTE 3D CON METALES PBR Y HDRI ---
+// --- COMPONENTE 3D CON IMAGEN EN PLANOS (UV MAPPING) ---
 const StatueModel = ({ 
   selectedId, 
   setSelectedId, 
@@ -154,34 +154,39 @@ const StatueModel = ({
 }) => {
   useCursor(hovered !== null, 'pointer', 'auto');
   const controlsRef = useRef();
+  
+  // Cargar la imagen de la estatua
+  const baseTexture = useTexture('/estatua.jpg');
+  baseTexture.colorSpace = THREE.SRGBColorSpace; // Asegurar colores correctos
+
+  // Clonar la textura 5 veces y aplicar el mapeo UV para "rebanar" la imagen
+  const slicedTextures = useMemo(() => {
+    return SECTIONS_DATA.map(section => {
+      const tex = baseTexture.clone();
+      tex.needsUpdate = true;
+      tex.repeat.set(1, section.uvHeight);
+      tex.offset.set(0, section.uvOffset);
+      return tex;
+    });
+  }, [baseTexture]);
+
+  // Dimensiones base del plano (proporción 1:2 para coincidir con la estatua vertical)
+  const PLANE_WIDTH = 3.0;
 
   // Interpolación de cámara a la sección seleccionada
   useFrame((state) => {
     if (selectedId !== null && !collapsed) {
       const targetY = SECTIONS_DATA[selectedId].yPos;
-      state.camera.position.lerp(new THREE.Vector3(0, targetY + 1.5, 6), 0.05);
+      state.camera.position.lerp(new THREE.Vector3(0, targetY, 6.5), 0.05);
       controlsRef.current.target.lerp(new THREE.Vector3(0, targetY, 0), 0.05);
     } else if (stoneActive) {
-      // Zoom out dramático para ver el impacto
-      state.camera.position.lerp(new THREE.Vector3(0, 1.0, 9), 0.04);
-      controlsRef.current.target.lerp(new THREE.Vector3(0, -1.0, 0), 0.04);
+      state.camera.position.lerp(new THREE.Vector3(0, 0.0, 10), 0.04);
+      controlsRef.current.target.lerp(new THREE.Vector3(0, -1.5, 0), 0.04);
     } else {
-      // Vista inicial amplia
-      state.camera.position.lerp(new THREE.Vector3(0, 1.5, 9), 0.05);
-      controlsRef.current.target.lerp(new THREE.Vector3(0, 0.5, 0), 0.05);
+      state.camera.position.lerp(new THREE.Vector3(0, 0.0, 9), 0.05);
+      controlsRef.current.target.lerp(new THREE.Vector3(0, 0.0, 0), 0.05);
     }
   });
-
-  const createMaterial = (section, isHovered) => (
-    <meshStandardMaterial 
-      color={section.color}
-      roughness={section.rough}
-      metalness={section.metalness}
-      envMapIntensity={2.5}
-      emissive={isHovered ? section.color : "#000000"}
-      emissiveIntensity={isHovered ? 0.35 : 0}
-    />
-  );
 
   return (
     <>
@@ -195,24 +200,15 @@ const StatueModel = ({
         dampingFactor={0.05}
       />
       
-      {/* Iluminación PBR HDRI Realista */}
-      <Environment preset="city" />
-      <ambientLight intensity={0.2} />
-      <directionalLight position={[10, 10, 5]} intensity={1.5} castShadow shadow-mapSize={[2048, 2048]} />
-      <spotLight position={[-5, 5, 5]} intensity={0.8} angle={0.5} penumbra={1} color="#a0b0ff" />
-      <pointLight position={[0, -2, 3]} intensity={1.5} color="#ffd573" distance={10} />
+      {/* Iluminación básica ya que la imagen ya tiene iluminación al horno (baked) */}
+      <ambientLight intensity={1.5} />
+      <directionalLight position={[5, 5, 5]} intensity={1.0} castShadow />
       
       {/* Grupo General de la Estatua */}
       <group position={[0, -0.5, 0]}>
-        
-        {/* Pedestal de Piedra Gris */}
-        <mesh position={[0, -2.6, 0]} receiveShadow castShadow>
-          <cylinderGeometry args={[2.2, 2.4, 0.8, 32]} />
-          <meshStandardMaterial color="#2d2d35" roughness={0.9} metalness={0.2} envMapIntensity={0.5} />
-        </mesh>
 
-        <Float speed={2} rotationIntensity={0.05} floatIntensity={0.2}>
-          {/* 5 Secciones de la Estatua */}
+        <Float speed={2} rotationIntensity={0.02} floatIntensity={0.1}>
+          {/* 5 Secciones de la Estatua (Rebanadas de la Imagen) */}
           {SECTIONS_DATA.map((section, idx) => {
             const isSelected = selectedId === section.id;
             const isHovered = hovered === section.id;
@@ -233,36 +229,23 @@ const StatueModel = ({
                 }}
                 onPointerOut={() => setHovered(null)}
               >
-                {/* Geometrías majestuosas y unificadas (Estilo Monolito/Obelisco Esculpido) */}
-                <mesh castShadow receiveShadow scale={isSelected ? 1.05 : 1}>
-                  {section.id === 0 && (
-                    // Cabeza: Corona Cilíndrica majestuosa
-                    <cylinderGeometry args={[0.45, 0.55, 1.0, 32]} />
-                  )}
-                  {section.id === 1 && (
-                    // Pecho: Torso ancho y robusto
-                    <cylinderGeometry args={[0.7, 0.65, 1.2, 32]} />
-                  )}
-                  {section.id === 2 && (
-                    // Vientre: Centro sólido
-                    <cylinderGeometry args={[0.65, 0.6, 1.0, 32]} />
-                  )}
-                  {section.id === 3 && (
-                    // Piernas: Base alta y fuerte
-                    <cylinderGeometry args={[0.6, 0.55, 1.8, 32]} />
-                  )}
-                  {section.id === 4 && (
-                    // Pies: Base terrenal ancha
-                    <cylinderGeometry args={[0.55, 0.65, 0.8, 32]} />
-                  )}
-                  {createMaterial(section, isHovered)}
+                {/* Plano con la porción de la textura */}
+                <mesh castShadow scale={isSelected ? 1.05 : 1}>
+                  <planeGeometry args={[PLANE_WIDTH, section.planeHeight]} />
+                  <meshStandardMaterial 
+                    map={slicedTextures[idx]} 
+                    roughness={0.5} 
+                    emissive={isHovered ? "#ffffff" : "#000000"}
+                    emissiveIntensity={isHovered ? 0.15 : 0}
+                    side={THREE.DoubleSide}
+                  />
                 </mesh>
                 
-                {/* Juntas metálicas decorativas entre secciones */}
-                {section.id !== 4 && (
-                  <mesh position={[0, - (section.id === 0 ? 0.5 : section.id === 1 ? 0.6 : section.id === 2 ? 0.5 : 0.9), 0]} castShadow>
-                    <torusGeometry args={[section.id === 0 ? 0.55 : section.id === 1 ? 0.65 : section.id === 2 ? 0.6 : 0.55, 0.04, 16, 32]} />
-                    <meshStandardMaterial color="#111" roughness={0.8} metalness={0.9} />
+                {/* Resplandor trasero estético si está seleccionado */}
+                {isSelected && (
+                  <mesh position={[0, 0, -0.1]}>
+                    <planeGeometry args={[PLANE_WIDTH * 1.1, section.planeHeight * 1.1]} />
+                    <meshBasicMaterial color={section.color} transparent opacity={0.3} blur={1} />
                   </mesh>
                 )}
               </group>
@@ -275,14 +258,14 @@ const StatueModel = ({
           <mesh 
             position={[
               0, 
-              THREE.MathUtils.lerp(12, -1.8, stoneProgress), 
-              THREE.MathUtils.lerp(6, 0.8, stoneProgress)
+              THREE.MathUtils.lerp(12, -2.5, stoneProgress), 
+              THREE.MathUtils.lerp(6, 0.2, stoneProgress)
             ]}
             rotation={[stoneProgress * 20, stoneProgress * 25, 0]}
             castShadow
           >
             <dodecahedronGeometry args={[0.6, 1]} />
-            <meshStandardMaterial color="#888894" roughness={0.8} metalness={0.3} envMapIntensity={1.0} />
+            <meshStandardMaterial color="#888894" roughness={0.8} metalness={0.3} />
           </mesh>
         )}
       </group>
@@ -504,17 +487,19 @@ export default function App() {
 
       {/* LIENZO 3D (R3F) */}
       <div className="w-full h-full absolute top-0 left-0">
-        <Canvas shadows camera={{ position: [0, 1.2, 8.5], fov: 45 }}>
-          <StatueModel 
-            selectedId={selectedId} 
-            setSelectedId={setSelectedId} 
-            hovered={hovered}
-            setHovered={setHovered}
-            stoneActive={stoneActive}
-            stoneProgress={stoneProgress}
-            collapsed={collapsed}
-            collapseOffsets={collapseOffsets}
-          />
+        <Canvas shadows camera={{ position: [0, 0.0, 9], fov: 45 }}>
+          <Suspense fallback={null}>
+            <StatueModel 
+              selectedId={selectedId} 
+              setSelectedId={setSelectedId} 
+              hovered={hovered}
+              setHovered={setHovered}
+              stoneActive={stoneActive}
+              stoneProgress={stoneProgress}
+              collapsed={collapsed}
+              collapseOffsets={collapseOffsets}
+            />
+          </Suspense>
         </Canvas>
       </div>
 
