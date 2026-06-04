@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;800&family=Montserrat:wght@300;400;500;600;700&display=swap');
+
+@theme {
+  --font-serif: 'Cinzel', serif;
+  --font-sans: 'Montserrat', sans-serif;
+  
+  --color-gold: #FFD700;
+  --color-gold-glow: rgba(255, 215, 0, 0.4);
+  --color-silver: #C0C0C0;
+  --color-bronze: #CD7F32;
+  --color-iron: #808080;
+  --color-clay: #B87333;
+}
+
+body {
+  margin: 0;
+  background-color: #030308;
+  color: #f0f0f5;
+  font-family: var(--font-sans);
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}
+
+/* Custom premium scrollbar for sidebar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(212, 175, 55, 0.2);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(212, 175, 55, 0.5);
+}
