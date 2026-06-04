@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, Suspense, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows, Float, useCursor, useTexture } from '@react-three/drei';
+import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Info, Play, X, RotateCcw, Shield, Compass, BookOpen, Clock, Activity } from 'lucide-react';
 import * as THREE from 'three';
@@ -141,6 +142,57 @@ const KINGDOM_OF_GOD = {
   ]
 };
 
+// --- SISTEMA DE PARTÍCULAS (POLVO DE LA DESTRUCCIÓN) ---
+const DustParticles = ({ collapsed }) => {
+  const pointsRef = useRef();
+  const particleCount = 2000;
+  
+  const [positions] = useState(() => {
+    const pos = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount; i++) {
+      // Iniciar las partículas cerca del suelo y esparcidas
+      pos[i*3] = (Math.random() - 0.5) * 6; // x
+      pos[i*3+1] = -3 + (Math.random() * 1.5); // y
+      pos[i*3+2] = (Math.random() - 0.5) * 6; // z
+    }
+    return pos;
+  });
+
+  const [velocities] = useState(() => {
+    const v = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount; i++) {
+      // Velocidad expansiva y hacia arriba
+      v[i*3] = (Math.random() - 0.5) * 0.15; // vx
+      v[i*3+1] = Math.random() * 0.2; // vy
+      v[i*3+2] = (Math.random() - 0.5) * 0.15; // vz
+    }
+    return v;
+  });
+
+  useFrame(() => {
+    if (collapsed && pointsRef.current) {
+      const positionsArray = pointsRef.current.geometry.attributes.position.array;
+      for (let i = 0; i < particleCount; i++) {
+        positionsArray[i*3] += velocities[i*3];
+        positionsArray[i*3+1] += velocities[i*3+1];
+        positionsArray[i*3+2] += velocities[i*3+2];
+      }
+      pointsRef.current.geometry.attributes.position.needsUpdate = true;
+    }
+  });
+
+  if (!collapsed) return null;
+
+  return (
+    <points ref={pointsRef}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" count={particleCount} array={positions} itemSize={3} />
+      </bufferGeometry>
+      <pointsMaterial size={0.06} color="#d4b483" transparent opacity={0.6} sizeAttenuation={true} depthWrite={false} />
+    </points>
+  );
+};
+
 // --- COMPONENTE 3D CON IMAGEN EN PLANOS (UV MAPPING) ---
 const StatueModel = ({ 
   selectedId, 
@@ -206,6 +258,9 @@ const StatueModel = ({
       
       {/* Grupo General de la Estatua */}
       <group position={[0, -0.5, 0]}>
+
+        {/* Nube de Polvo Profético */}
+        <DustParticles collapsed={collapsed} />
 
         <Float speed={2} rotationIntensity={0.02} floatIntensity={0.1}>
           {/* 5 Secciones de la Estatua (Rebanadas de la Imagen) */}
@@ -499,6 +554,10 @@ export default function App() {
               collapsed={collapsed}
               collapseOffsets={collapseOffsets}
             />
+            {/* Post-procesamiento Cinemático */}
+            <EffectComposer>
+              <Bloom luminanceThreshold={0.3} luminanceSmoothing={0.9} mipmapBlur intensity={1.2} />
+            </EffectComposer>
           </Suspense>
         </Canvas>
       </div>
