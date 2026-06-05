@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, Suspense, useMemo } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { OrbitControls, Environment, ContactShadows, Float, useCursor, useTexture } from '@react-three/drei';
+import { OrbitControls, Environment, ContactShadows, Float, useCursor } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Info, Play, X, RotateCcw, Shield, Compass, BookOpen, Clock, Activity } from 'lucide-react';
@@ -193,7 +193,7 @@ const DustParticles = ({ collapsed }) => {
   );
 };
 
-// --- COMPONENTE 3D CON IMAGEN EN PLANOS (UV MAPPING) ---
+// --- COMPONENTE 3D CON MODELADO PROCEDURAL ---
 const StatueModel = ({ 
   selectedId, 
   setSelectedId, 
@@ -206,24 +206,6 @@ const StatueModel = ({
 }) => {
   useCursor(hovered !== null, 'pointer', 'auto');
   const controlsRef = useRef();
-  
-  // Cargar la imagen de la estatua
-  const baseTexture = useTexture('/estatua.jpg');
-  baseTexture.colorSpace = THREE.SRGBColorSpace; // Asegurar colores correctos
-
-  // Clonar la textura 5 veces y aplicar el mapeo UV para "rebanar" la imagen
-  const slicedTextures = useMemo(() => {
-    return SECTIONS_DATA.map(section => {
-      const tex = baseTexture.clone();
-      tex.needsUpdate = true;
-      tex.repeat.set(1, section.uvHeight);
-      tex.offset.set(0, section.uvOffset);
-      return tex;
-    });
-  }, [baseTexture]);
-
-  // Dimensiones base del plano (proporción 1:2 para coincidir con la estatua vertical)
-  const PLANE_WIDTH = 3.0;
 
   // Interpolación de cámara a la sección seleccionada
   useFrame((state) => {
@@ -252,9 +234,12 @@ const StatueModel = ({
         dampingFactor={0.05}
       />
       
-      {/* Iluminación básica ya que la imagen ya tiene iluminación al horno (baked) */}
-      <ambientLight intensity={1.5} />
-      <directionalLight position={[5, 5, 5]} intensity={1.0} castShadow />
+      {/* Iluminación 3D Cinematic y Reflejos */}
+      <ambientLight intensity={0.25} />
+      <directionalLight position={[5, 8, 5]} intensity={1.5} castShadow shadow-mapSize={[2048, 2048]} />
+      <directionalLight position={[-5, 5, -5]} intensity={0.5} color="#85a5ff" />
+      <pointLight position={[0, 4, 3]} intensity={0.8} color="#ffd700" />
+      <Environment preset="studio" />
       
       {/* Grupo General de la Estatua */}
       <group position={[0, -0.5, 0]}>
@@ -263,7 +248,7 @@ const StatueModel = ({
         <DustParticles collapsed={collapsed} />
 
         <Float speed={2} rotationIntensity={0.02} floatIntensity={0.1}>
-          {/* 5 Secciones de la Estatua (Rebanadas de la Imagen) */}
+          {/* 5 Secciones de la Estatua (Composición 3D Estilizada) */}
           {SECTIONS_DATA.map((section, idx) => {
             const isSelected = selectedId === section.id;
             const isHovered = hovered === section.id;
@@ -284,23 +269,361 @@ const StatueModel = ({
                 }}
                 onPointerOut={() => setHovered(null)}
               >
-                {/* Plano con la porción de la textura */}
-                <mesh castShadow scale={isSelected ? 1.05 : 1}>
-                  <planeGeometry args={[PLANE_WIDTH, section.planeHeight]} />
-                  <meshStandardMaterial 
-                    map={slicedTextures[idx]} 
-                    roughness={0.5} 
-                    emissive={isHovered ? "#ffffff" : "#000000"}
-                    emissiveIntensity={isHovered ? 0.15 : 0}
-                    side={THREE.DoubleSide}
-                  />
-                </mesh>
+                {/* Composición de meshes de cada sección 3D */}
+                <group scale={isSelected ? 1.05 : 1}>
+                  {idx === 0 && (
+                    <>
+                      {/* Cabeza de Oro (Babilonia) - Casco y Cráneo Poligonal */}
+                      <mesh castShadow position={[0, 0.05, 0]}>
+                        <icosahedronGeometry args={[0.26, 1]} />
+                        <meshStandardMaterial color="#ffd700" metalness={1.0} roughness={0.12} clearcoat={1.0} clearcoatRoughness={0.05} flatShading={true} emissive={isHovered ? "#ffd700" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      {/* Cara interna (detrás de la visera) */}
+                      <mesh castShadow position={[0, 0, 0.04]}>
+                        <sphereGeometry args={[0.21, 8, 8]} />
+                        <meshStandardMaterial color="#ffd700" metalness={0.9} roughness={0.25} flatShading={true} />
+                      </mesh>
+                      {/* Protectores de mejillas del casco (Cheek guards) */}
+                      <mesh castShadow position={[-0.18, -0.08, 0.16]} rotation={[0, -0.3, -0.2]}>
+                        <boxGeometry args={[0.06, 0.16, 0.16]} />
+                        <meshStandardMaterial color="#ffd700" metalness={1.0} roughness={0.12} clearcoat={1.0} flatShading={true} emissive={isHovered ? "#ffd700" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      <mesh castShadow position={[0.18, -0.08, 0.16]} rotation={[0, 0.3, 0.2]}>
+                        <boxGeometry args={[0.06, 0.16, 0.16]} />
+                        <meshStandardMaterial color="#ffd700" metalness={1.0} roughness={0.12} clearcoat={1.0} flatShading={true} emissive={isHovered ? "#ffd700" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      {/* Cresta de casco de combate romano (Plume) */}
+                      <mesh castShadow position={[0, 0.26, 0.0]}>
+                        <boxGeometry args={[0.04, 0.08, 0.35]} />
+                        <meshStandardMaterial color="#ffd700" metalness={1.0} roughness={0.12} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[0, 0.36, -0.05]} rotation={[-0.15, 0, 0]}>
+                        <boxGeometry args={[0.06, 0.22, 0.46]} />
+                        <meshStandardMaterial color="#ffd700" metalness={1.0} roughness={0.12} clearcoat={1.0} flatShading={true} emissive={isHovered ? "#ffd700" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      {/* Barba babilónica cincelada y escalonada */}
+                      <mesh castShadow position={[0, -0.15, 0.18]} rotation={[0.1, 0, 0]}>
+                        <boxGeometry args={[0.18, 0.1, 0.1]} />
+                        <meshStandardMaterial color="#ffd700" metalness={1.0} roughness={0.15} flatShading={true} emissive={isHovered ? "#ffd700" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      <mesh castShadow position={[0, -0.23, 0.16]} rotation={[0.15, 0, 0]}>
+                        <boxGeometry args={[0.14, 0.1, 0.08]} />
+                        <meshStandardMaterial color="#ffd700" metalness={1.0} roughness={0.15} flatShading={true} emissive={isHovered ? "#ffd700" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      <mesh castShadow position={[0, -0.3, 0.14]} rotation={[0.2, 0, 0]}>
+                        <boxGeometry args={[0.08, 0.08, 0.06]} />
+                        <meshStandardMaterial color="#ffd700" metalness={1.0} roughness={0.15} flatShading={true} emissive={isHovered ? "#ffd700" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      {/* Cuello */}
+                      <mesh castShadow position={[0, -0.32, 0]}>
+                        <cylinderGeometry args={[0.13, 0.15, 0.22, 6]} />
+                        <meshStandardMaterial color="#ffd700" metalness={1.0} roughness={0.12} clearcoat={1.0} flatShading={true} emissive={isHovered ? "#ffd700" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                    </>
+                  )}
+                  {idx === 1 && (
+                    <>
+                      {/* Pecho y Brazos de Plata (Medo-Persia) - Coraza muscular */}
+                      <mesh castShadow position={[0, 0.2, 0]}>
+                        <cylinderGeometry args={[0.42, 0.34, 0.85, 8]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} clearcoat={0.6} clearcoatRoughness={0.1} flatShading={true} emissive={isHovered ? "#ffffff" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      <mesh castShadow position={[0, -0.4, 0]}>
+                        <cylinderGeometry args={[0.34, 0.3, 0.42, 8]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} clearcoat={0.6} clearcoatRoughness={0.1} flatShading={true} emissive={isHovered ? "#ffffff" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      {/* Músculos Pectorales */}
+                      <mesh castShadow position={[-0.11, 0.32, 0.36]} rotation={[0.05, -0.08, -0.05]}>
+                        <boxGeometry args={[0.18, 0.25, 0.08]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} clearcoat={0.6} flatShading={true} emissive={isHovered ? "#ffffff" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      <mesh castShadow position={[0.11, 0.32, 0.36]} rotation={[0.05, 0.08, 0.05]}>
+                        <boxGeometry args={[0.18, 0.25, 0.08]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} clearcoat={0.6} flatShading={true} emissive={isHovered ? "#ffffff" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      {/* Abdominales cincelados (Six Pack) */}
+                      <mesh castShadow position={[-0.08, 0.14, 0.35]}>
+                        <boxGeometry args={[0.09, 0.1, 0.05]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} emissive={isHovered ? "#ffffff" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      <mesh castShadow position={[0.08, 0.14, 0.35]}>
+                        <boxGeometry args={[0.09, 0.1, 0.05]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} emissive={isHovered ? "#ffffff" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      <mesh castShadow position={[-0.08, 0.02, 0.34]}>
+                        <boxGeometry args={[0.09, 0.1, 0.05]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} emissive={isHovered ? "#ffffff" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      <mesh castShadow position={[0.08, 0.02, 0.34]}>
+                        <boxGeometry args={[0.09, 0.1, 0.05]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} emissive={isHovered ? "#ffffff" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      <mesh castShadow position={[-0.08, -0.1, 0.33]}>
+                        <boxGeometry args={[0.09, 0.1, 0.05]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} emissive={isHovered ? "#ffffff" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      <mesh castShadow position={[0.08, -0.1, 0.33]}>
+                        <boxGeometry args={[0.09, 0.1, 0.05]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} emissive={isHovered ? "#ffffff" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      {/* Costillas (Placas laterales) */}
+                      <mesh castShadow position={[-0.22, 0.06, 0.3]} rotation={[0, 0, 0.1]}>
+                        <boxGeometry args={[0.06, 0.3, 0.05]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[0.22, 0.06, 0.3]} rotation={[0, 0, -0.1]}>
+                        <boxGeometry args={[0.06, 0.3, 0.05]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} />
+                      </mesh>
+                      {/* Hombreras segmentadas (Pauldrons) */}
+                      <mesh castShadow position={[-0.56, 0.45, 0]}>
+                        <icosahedronGeometry args={[0.2, 1]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} emissive={isHovered ? "#ffffff" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      <mesh castShadow position={[-0.62, 0.3, 0]}>
+                        <icosahedronGeometry args={[0.18, 1]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[0.56, 0.45, 0]}>
+                        <icosahedronGeometry args={[0.2, 1]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} emissive={isHovered ? "#ffffff" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      <mesh castShadow position={[0.62, 0.3, 0]}>
+                        <icosahedronGeometry args={[0.18, 1]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} />
+                      </mesh>
+                      {/* Brazos */}
+                      <mesh castShadow position={[-0.66, 0.12, 0]} rotation={[0, 0, 0.15]}>
+                        <cylinderGeometry args={[0.1, 0.09, 0.45, 6]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[0.66, 0.12, 0]} rotation={[0, 0, -0.15]}>
+                        <cylinderGeometry args={[0.1, 0.09, 0.45, 6]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} />
+                      </mesh>
+                      {/* Codos */}
+                      <mesh castShadow position={[-0.7, -0.12, 0.02]}>
+                        <icosahedronGeometry args={[0.09, 1]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[0.7, -0.12, 0.02]}>
+                        <icosahedronGeometry args={[0.09, 1]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} />
+                      </mesh>
+                      {/* Antebrazos */}
+                      <mesh castShadow position={[-0.75, -0.32, 0.12]} rotation={[-0.25, 0, 0.1]}>
+                        <cylinderGeometry args={[0.09, 0.08, 0.45, 6]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[0.75, -0.32, 0.12]} rotation={[-0.25, 0, -0.1]}>
+                        <cylinderGeometry args={[0.09, 0.08, 0.45, 6]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} />
+                      </mesh>
+                      {/* Manos */}
+                      <mesh castShadow position={[-0.82, -0.56, 0.22]}>
+                        <icosahedronGeometry args={[0.1, 1]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} emissive={isHovered ? "#ffffff" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      <mesh castShadow position={[0.82, -0.56, 0.22]}>
+                        <icosahedronGeometry args={[0.1, 1]} />
+                        <meshStandardMaterial color="#e5e7eb" metalness={1.0} roughness={0.22} flatShading={true} emissive={isHovered ? "#ffffff" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                    </>
+                  )}
+                  {idx === 2 && (
+                    <>
+                      {/* Vientre y Muslos de Bronce (Grecia) */}
+                      <mesh castShadow position={[0, 0.3, 0]}>
+                        <cylinderGeometry args={[0.3, 0.33, 0.3, 8]} />
+                        <meshStandardMaterial color="#cd7f32" metalness={1.0} roughness={0.3} clearcoat={0.3} flatShading={true} emissive={isHovered ? "#cd7f32" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      {/* Cinturón ancho con hebilla */}
+                      <mesh castShadow position={[0, 0.15, 0]}>
+                        <cylinderGeometry args={[0.35, 0.35, 0.16, 8]} />
+                        <meshStandardMaterial color="#cd7f32" metalness={1.0} roughness={0.3} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[0, 0.15, 0.36]}>
+                        <boxGeometry args={[0.14, 0.18, 0.06]} />
+                        <meshStandardMaterial color="#ffd700" metalness={1.0} roughness={0.12} flatShading={true} />
+                      </mesh>
+                      {/* Falda de combate (Pteruges) - 8 Tiras dispuestas en círculo */}
+                      <mesh castShadow position={[0, -0.15, 0.38]} rotation={[0.15, 0, 0]}>
+                        <boxGeometry args={[0.08, 0.44, 0.03]} />
+                        <meshStandardMaterial color="#cd7f32" metalness={1.0} roughness={0.3} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[-0.14, -0.15, 0.35]} rotation={[0.15, -0.3, 0.05]}>
+                        <boxGeometry args={[0.08, 0.44, 0.03]} />
+                        <meshStandardMaterial color="#cd7f32" metalness={1.0} roughness={0.3} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[0.14, -0.15, 0.35]} rotation={[0.15, 0.3, -0.05]}>
+                        <boxGeometry args={[0.08, 0.44, 0.03]} />
+                        <meshStandardMaterial color="#cd7f32" metalness={1.0} roughness={0.3} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[-0.26, -0.15, 0.26]} rotation={[0.08, -0.7, 0.1]}>
+                        <boxGeometry args={[0.08, 0.44, 0.03]} />
+                        <meshStandardMaterial color="#cd7f32" metalness={1.0} roughness={0.3} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[0.26, -0.15, 0.26]} rotation={[0.08, 0.7, -0.1]}>
+                        <boxGeometry args={[0.08, 0.44, 0.03]} />
+                        <meshStandardMaterial color="#cd7f32" metalness={1.0} roughness={0.3} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[-0.22, -0.15, -0.26]} rotation={[-0.08, -2.4, 0.1]}>
+                        <boxGeometry args={[0.08, 0.44, 0.03]} />
+                        <meshStandardMaterial color="#cd7f32" metalness={1.0} roughness={0.3} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[0.22, -0.15, -0.26]} rotation={[-0.08, 2.4, -0.1]}>
+                        <boxGeometry args={[0.08, 0.44, 0.03]} />
+                        <meshStandardMaterial color="#cd7f32" metalness={1.0} roughness={0.3} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[0, -0.15, -0.34]} rotation={[-0.15, 0, 0]}>
+                        <boxGeometry args={[0.08, 0.44, 0.03]} />
+                        <meshStandardMaterial color="#cd7f32" metalness={1.0} roughness={0.3} flatShading={true} />
+                      </mesh>
+                      {/* Muslos */}
+                      <mesh castShadow position={[-0.18, -0.32, 0]} rotation={[0, 0, 0.06]}>
+                        <cylinderGeometry args={[0.14, 0.12, 0.5, 6]} />
+                        <meshStandardMaterial color="#cd7f32" metalness={1.0} roughness={0.3} flatShading={true} emissive={isHovered ? "#cd7f32" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      <mesh castShadow position={[0.18, -0.32, 0]} rotation={[0, 0, -0.06]}>
+                        <cylinderGeometry args={[0.14, 0.12, 0.5, 6]} />
+                        <meshStandardMaterial color="#cd7f32" metalness={1.0} roughness={0.3} flatShading={true} emissive={isHovered ? "#cd7f32" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                    </>
+                  )}
+                  {idx === 3 && (
+                    <>
+                      {/* Piernas de Hierro (Roma) */}
+                      {/* Rodilleras (Kneecaps) */}
+                      <mesh castShadow position={[-0.18, 0.8, 0.04]}>
+                        <icosahedronGeometry args={[0.12, 1]} />
+                        <meshStandardMaterial color="#555d66" metalness={0.9} roughness={0.45} flatShading={true} emissive={isHovered ? "#555d66" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      <mesh castShadow position={[0.18, 0.8, 0.04]}>
+                        <icosahedronGeometry args={[0.12, 1]} />
+                        <meshStandardMaterial color="#555d66" metalness={0.9} roughness={0.45} flatShading={true} emissive={isHovered ? "#555d66" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      {/* Pantorrillas */}
+                      <mesh castShadow position={[-0.18, 0, 0]}>
+                        <cylinderGeometry args={[0.13, 0.1, 1.4, 6]} />
+                        <meshStandardMaterial color="#555d66" metalness={0.9} roughness={0.45} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[0.18, 0, 0]}>
+                        <cylinderGeometry args={[0.13, 0.1, 1.4, 6]} />
+                        <meshStandardMaterial color="#555d66" metalness={0.9} roughness={0.45} flatShading={true} />
+                      </mesh>
+                      {/* Placas frontales de espinilleras (Greaves) */}
+                      <mesh castShadow position={[-0.18, 0, 0.12]} rotation={[0.05, 0, 0]}>
+                        <boxGeometry args={[0.09, 1.3, 0.06]} />
+                        <meshStandardMaterial color="#555d66" metalness={0.9} roughness={0.45} flatShading={true} emissive={isHovered ? "#555d66" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      <mesh castShadow position={[0.18, 0, 0.12]} rotation={[0.05, 0, 0]}>
+                        <boxGeometry args={[0.09, 1.3, 0.06]} />
+                        <meshStandardMaterial color="#555d66" metalness={0.9} roughness={0.45} flatShading={true} emissive={isHovered ? "#555d66" : "#000000"} emissiveIntensity={isHovered ? 0.2 : 0} />
+                      </mesh>
+                      {/* Tobillos */}
+                      <mesh castShadow position={[-0.18, -0.8, 0]}>
+                        <icosahedronGeometry args={[0.09, 1]} />
+                        <meshStandardMaterial color="#555d66" metalness={0.9} roughness={0.45} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[0.18, -0.8, 0]}>
+                        <icosahedronGeometry args={[0.09, 1]} />
+                        <meshStandardMaterial color="#555d66" metalness={0.9} roughness={0.45} flatShading={true} />
+                      </mesh>
+                    </>
+                  )}
+                  {idx === 4 && (
+                    <>
+                      {/* Pies de Hierro y Barro (Europa Dividida) */}
+                      {/* Pie Izquierdo: Talón de Hierro, Frente de Barro, dedos alternados */}
+                      <mesh castShadow position={[-0.18, 0.1, -0.04]}>
+                        <boxGeometry args={[0.24, 0.18, 0.24]} />
+                        <meshStandardMaterial color="#555d66" metalness={0.9} roughness={0.4} flatShading={true} emissive={isHovered ? "#555d66" : "#000000"} emissiveIntensity={isHovered ? 0.15 : 0} />
+                      </mesh>
+                      <mesh castShadow position={[-0.18, -0.15, 0.15]}>
+                        <boxGeometry args={[0.26, 0.06, 0.52]} />
+                        <meshStandardMaterial color="#9c5327" metalness={0.0} roughness={0.95} flatShading={true} emissive={isHovered ? "#9c5327" : "#000000"} emissiveIntensity={isHovered ? 0.15 : 0} />
+                      </mesh>
+                      {/* Placa de metal empeine */}
+                      <mesh castShadow position={[-0.18, -0.02, 0.16]} rotation={[0.1, 0, 0]}>
+                        <boxGeometry args={[0.22, 0.14, 0.22]} />
+                        <meshStandardMaterial color="#555d66" metalness={0.9} roughness={0.4} flatShading={true} />
+                      </mesh>
+                      {/* Parche de barro incrustado */}
+                      <mesh castShadow position={[-0.18, 0.08, 0.18]} rotation={[0.2, 0.2, -0.1]}>
+                        <boxGeometry args={[0.12, 0.18, 0.12]} />
+                        <meshStandardMaterial color="#9c5327" metalness={0.0} roughness={0.95} flatShading={true} />
+                      </mesh>
+                      {/* Dedos pie izquierdo alternados */}
+                      <mesh castShadow position={[-0.1, -0.1, 0.42]}>
+                        <boxGeometry args={[0.06, 0.12, 0.14]} />
+                        <meshStandardMaterial color="#9c5327" metalness={0.0} roughness={0.95} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[-0.14, -0.1, 0.41]}>
+                        <boxGeometry args={[0.05, 0.1, 0.12]} />
+                        <meshStandardMaterial color="#555d66" metalness={0.9} roughness={0.45} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[-0.18, -0.1, 0.4]}>
+                        <boxGeometry args={[0.05, 0.09, 0.11]} />
+                        <meshStandardMaterial color="#9c5327" metalness={0.0} roughness={0.95} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[-0.22, -0.1, 0.39]}>
+                        <boxGeometry args={[0.04, 0.08, 0.1]} />
+                        <meshStandardMaterial color="#555d66" metalness={0.9} roughness={0.45} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[-0.26, -0.1, 0.38]}>
+                        <boxGeometry args={[0.04, 0.07, 0.09]} />
+                        <meshStandardMaterial color="#9c5327" metalness={0.0} roughness={0.95} flatShading={true} />
+                      </mesh>
+
+                      {/* Pie Derecho: Talón de Barro, Frente de Hierro, dedos alternados */}
+                      <mesh castShadow position={[0.18, 0.1, -0.04]}>
+                        <boxGeometry args={[0.24, 0.18, 0.24]} />
+                        <meshStandardMaterial color="#9c5327" metalness={0.0} roughness={0.95} flatShading={true} emissive={isHovered ? "#9c5327" : "#000000"} emissiveIntensity={isHovered ? 0.15 : 0} />
+                      </mesh>
+                      <mesh castShadow position={[0.18, -0.15, 0.15]}>
+                        <boxGeometry args={[0.26, 0.06, 0.52]} />
+                        <meshStandardMaterial color="#555d66" metalness={0.9} roughness={0.4} flatShading={true} emissive={isHovered ? "#555d66" : "#000000"} emissiveIntensity={isHovered ? 0.15 : 0} />
+                      </mesh>
+                      {/* Placa de barro empeine */}
+                      <mesh castShadow position={[0.18, -0.02, 0.16]} rotation={[0.1, 0, 0]}>
+                        <boxGeometry args={[0.22, 0.14, 0.22]} />
+                        <meshStandardMaterial color="#9c5327" metalness={0.0} roughness={0.95} flatShading={true} />
+                      </mesh>
+                      {/* Parche de metal incrustado */}
+                      <mesh castShadow position={[0.18, 0.08, 0.18]} rotation={[0.2, -0.2, 0.1]}>
+                        <boxGeometry args={[0.12, 0.18, 0.12]} />
+                        <meshStandardMaterial color="#555d66" metalness={0.9} roughness={0.4} flatShading={true} />
+                      </mesh>
+                      {/* Dedos pie derecho alternados */}
+                      <mesh castShadow position={[0.1, -0.1, 0.42]}>
+                        <boxGeometry args={[0.06, 0.12, 0.14]} />
+                        <meshStandardMaterial color="#555d66" metalness={0.9} roughness={0.4} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[0.14, -0.1, 0.41]}>
+                        <boxGeometry args={[0.05, 0.1, 0.12]} />
+                        <meshStandardMaterial color="#9c5327" metalness={0.0} roughness={0.95} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[0.18, -0.1, 0.4]}>
+                        <boxGeometry args={[0.05, 0.09, 0.11]} />
+                        <meshStandardMaterial color="#555d66" metalness={0.9} roughness={0.4} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[0.22, -0.1, 0.39]}>
+                        <boxGeometry args={[0.04, 0.08, 0.1]} />
+                        <meshStandardMaterial color="#9c5327" metalness={0.0} roughness={0.95} flatShading={true} />
+                      </mesh>
+                      <mesh castShadow position={[0.26, -0.1, 0.38]}>
+                        <boxGeometry args={[0.04, 0.07, 0.09]} />
+                        <meshStandardMaterial color="#555d66" metalness={0.9} roughness={0.4} flatShading={true} />
+                      </mesh>
+                    </>
+                  )}
+                </group>
                 
-                {/* Resplandor trasero estético si está seleccionado */}
+                {/* Halo de selección circular 3D en lugar de plano 2D trasero */}
                 {isSelected && (
-                  <mesh position={[0, 0, -0.1]}>
-                    <planeGeometry args={[PLANE_WIDTH * 1.1, section.planeHeight * 1.1]} />
-                    <meshBasicMaterial color={section.color} transparent opacity={0.3} blur={1} />
+                  <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+                    <torusGeometry args={[0.8, 0.02, 8, 64]} />
+                    <meshBasicMaterial color={section.color} transparent opacity={0.8} />
                   </mesh>
                 )}
               </group>
