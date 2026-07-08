@@ -810,10 +810,10 @@ export default function App() {
       <header className="absolute top-0 left-0 w-full p-6 z-10 flex justify-between items-start pointer-events-none">
         <div className="pointer-events-auto">
           <h1 className="text-2xl md:text-4xl font-extrabold text-gold tracking-widest font-serif drop-shadow-[0_0_15px_rgba(212,175,55,0.6)]">
-            DANIEL 2
+            El Libro de Daniel
           </h1>
           <p className="text-[10px] md:text-xs text-gray-400 font-medium tracking-widest mt-1 uppercase">
-            Estatua Profética Multidimensional
+            La Estatua del Rey Nabucodonosor
           </p>
         </div>
         
