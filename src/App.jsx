@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Play, X, RotateCcw, Shield, Compass, BookOpen, Clock, Activity } from 'lucide-react';
 
@@ -158,6 +158,14 @@ export default function App() {
   const [showFlash, setShowFlash] = useState(false);
   const [showFinalModal, setShowFinalModal] = useState(false);
 
+  // Trail particles & impact effects
+  const [trailParticles, setTrailParticles] = useState([]);
+  const [impactParticles, setImpactParticles] = useState([]);
+  const [showImpactRing, setShowImpactRing] = useState(false);
+  const [screenShake, setScreenShake] = useState(false);
+  const trailIntervalRef = useRef(null);
+  const stoneProgressRef = useRef(0);
+
   // Tour guiado
   const [tourActive, setTourActive] = useState(false);
   const [tourStep, setTourStep] = useState(0);
@@ -167,12 +175,39 @@ export default function App() {
     if (stoneActive || collapsed) return;
     setSelectedId(null);
     setStoneActive(true);
+    stoneProgressRef.current = 0;
   };
 
   const handleStoneImpact = () => {
+    // Stop trail spawning
+    if (trailIntervalRef.current) {
+      clearInterval(trailIntervalRef.current);
+      trailIntervalRef.current = null;
+    }
+    // Screen shake
+    setScreenShake(true);
+    setTimeout(() => setScreenShake(false), 500);
+    // Impact ring
+    setShowImpactRing(true);
+    setTimeout(() => setShowImpactRing(false), 800);
+    // Spawn impact ember particles
+    const embers = Array.from({ length: 12 }, (_, i) => ({
+      id: Date.now() + i,
+      x: 50 + (Math.random() - 0.5) * 40,
+      y: 78 + (Math.random() - 0.5) * 10,
+      size: 3 + Math.random() * 6,
+      color: ['#ff6600', '#ff9900', '#ffcc00', '#ff3300', '#ffffff'][Math.floor(Math.random() * 5)],
+      dx: (Math.random() - 0.5) * 120,
+      dy: -(20 + Math.random() * 80),
+      delay: Math.random() * 0.2,
+    }));
+    setImpactParticles(embers);
+    setTimeout(() => setImpactParticles([]), 1500);
+    // Original impact logic
     setShowFlash(true);
     setCollapsed(true);
     setStoneActive(false);
+    setTrailParticles([]);
     setTimeout(() => setShowFlash(false), 600);
     setTimeout(() => {
       setShowFinalModal(true);
@@ -181,13 +216,54 @@ export default function App() {
   };
 
   const handleReset = () => {
+    if (trailIntervalRef.current) {
+      clearInterval(trailIntervalRef.current);
+      trailIntervalRef.current = null;
+    }
     setStoneActive(false);
     setCollapsed(false);
     setShowFlash(false);
     setShowFinalModal(false);
+    setTrailParticles([]);
+    setImpactParticles([]);
+    setShowImpactRing(false);
+    setScreenShake(false);
     setSelectedId(null);
     setTourActive(false);
   };
+
+  // Trail particle spawner — creates fire particles behind the stone as it falls
+  useEffect(() => {
+    if (stoneActive && !collapsed) {
+      const DURATION = 1800; // matches the stone animation duration in ms
+      const startTime = Date.now();
+      trailIntervalRef.current = setInterval(() => {
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / DURATION, 1);
+        // Easing: cubic-bezier(0.22, 0.68, 0, 1.0) approximation
+        const eased = 1 - Math.pow(1 - progress, 3);
+        stoneProgressRef.current = eased;
+        const currentTop = -80 + eased * (78 + 80); // maps to percentage-ish range
+        // Spawn 2-3 particles per tick
+        const count = 2 + Math.floor(Math.random() * 2);
+        const newParticles = Array.from({ length: count }, (_, i) => ({
+          id: Date.now() + Math.random() + i,
+          x: 50 + (Math.random() - 0.5) * 12,
+          y: Math.max(0, Math.min(100, (currentTop / 5.5) + 14 + Math.random() * 3)),
+          size: 4 + Math.random() * 10,
+          color: ['#ff4400', '#ff6600', '#ff8800', '#ffaa00', '#ffcc44', '#fff'][Math.floor(Math.random() * 6)],
+          duration: 0.4 + Math.random() * 0.5,
+        }));
+        setTrailParticles(prev => [...prev.slice(-30), ...newParticles]);
+      }, 50);
+      return () => {
+        if (trailIntervalRef.current) {
+          clearInterval(trailIntervalRef.current);
+          trailIntervalRef.current = null;
+        }
+      };
+    }
+  }, [stoneActive, collapsed]);
 
   // --- TOUR GUIADO ---
   const tourScript = [
@@ -233,7 +309,7 @@ export default function App() {
   const activeData = selectedId !== null ? SECTIONS_DATA[selectedId] : null;
 
   return (
-    <div className="w-screen h-screen bg-gradient-to-br from-gray-950 via-[#0a0710] to-black text-gray-100 overflow-hidden relative font-sans select-none">
+    <div className={`w-screen h-screen bg-gradient-to-br from-gray-950 via-[#0a0710] to-black text-gray-100 overflow-hidden relative font-sans select-none ${screenShake ? 'screen-shake' : ''}`}>
 
       {/* ===== HEADER ===== */}
       <header className="absolute top-0 left-0 w-full p-6 z-10 flex justify-between items-start pointer-events-none">
@@ -395,21 +471,138 @@ export default function App() {
             </div>
           )}
 
-          {/* Piedra proyectil */}
+          {/* ===== TRAIL PARTICLES (behind the stone) ===== */}
+          {trailParticles.map(p => (
+            <div
+              key={p.id}
+              className="absolute pointer-events-none z-20"
+              style={{
+                left: `${p.x}%`,
+                top: `${p.y}%`,
+                width: p.size,
+                height: p.size,
+                borderRadius: '50%',
+                background: `radial-gradient(circle, ${p.color}, transparent)`,
+                boxShadow: `0 0 ${p.size * 2}px ${p.color}`,
+                animation: `trailFade ${p.duration}s ease-out forwards`,
+              }}
+            />
+          ))}
+
+          {/* ===== PIEDRA PROYECTIL MEJORADA ===== */}
           {stoneActive && !collapsed && (
             <motion.div
-              className="absolute left-1/2 -translate-x-1/2 w-16 h-14 z-30"
-              style={{
-                background: 'radial-gradient(circle at 35% 30%, #b0b0b0, #666, #3a3a3a)',
-                borderRadius: '43% 57% 52% 48% / 45% 38% 62% 55%',
-                boxShadow: '0 0 30px rgba(150,150,150,0.5), 0 0 60px rgba(100,100,100,0.3)',
-              }}
+              className="absolute left-1/2 -translate-x-1/2 z-30"
+              style={{ width: 64, height: 56 }}
               initial={{ top: -80, scale: 0.3, rotate: 0 }}
               animate={{ top: '78%', scale: 1.2, rotate: 720 }}
-              transition={{ duration: 1.8, ease: [0.42, 0, 1, 1] }}
+              transition={{ duration: 1.8, ease: [0.22, 0.68, 0, 1.0] }}
               onAnimationComplete={handleStoneImpact}
+            >
+              {/* Motion blur streak */}
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: 'linear-gradient(to top, rgba(255,80,0,0.7), rgba(255,160,0,0.3), transparent)',
+                  borderRadius: '40% 40% 50% 50%',
+                  height: '300%',
+                  top: '10%',
+                  filter: 'blur(8px)',
+                  opacity: 0.7,
+                }}
+              />
+              {/* Outer fire glow */}
+              <div
+                className="absolute stone-fire-glow"
+                style={{
+                  inset: -12,
+                  borderRadius: '50%',
+                  background: 'radial-gradient(circle, rgba(255,100,0,0.4), rgba(255,60,0,0.15), transparent 70%)',
+                  filter: 'blur(6px)',
+                }}
+              />
+              {/* Stone core body */}
+              <div
+                className="stone-fire-glow"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  background: 'radial-gradient(circle at 30% 25%, #d4d4d4, #8a8a8a 30%, #555 60%, #333 85%, #1a1a1a)',
+                  borderRadius: '43% 57% 52% 48% / 45% 38% 62% 55%',
+                  position: 'relative',
+                  overflow: 'hidden',
+                }}
+              >
+                {/* Hot edge highlight */}
+                <div style={{
+                  position: 'absolute',
+                  inset: 0,
+                  borderRadius: 'inherit',
+                  background: 'conic-gradient(from 200deg, transparent 0%, rgba(255,100,0,0.5) 15%, transparent 30%, rgba(255,60,0,0.3) 60%, transparent 75%)',
+                  mixBlendMode: 'screen',
+                }} />
+                {/* Surface texture cracks */}
+                <div style={{
+                  position: 'absolute',
+                  inset: 0,
+                  borderRadius: 'inherit',
+                  background: `
+                    linear-gradient(135deg, transparent 40%, rgba(0,0,0,0.3) 41%, transparent 42%),
+                    linear-gradient(225deg, transparent 55%, rgba(0,0,0,0.2) 56%, transparent 57%),
+                    linear-gradient(315deg, transparent 30%, rgba(255,255,255,0.08) 31%, transparent 32%)
+                  `,
+                }} />
+                {/* Specular highlight */}
+                <div style={{
+                  position: 'absolute',
+                  top: '12%',
+                  left: '20%',
+                  width: '35%',
+                  height: '25%',
+                  borderRadius: '50%',
+                  background: 'radial-gradient(ellipse, rgba(255,255,255,0.35), transparent)',
+                  filter: 'blur(3px)',
+                }} />
+              </div>
+            </motion.div>
+          )}
+
+          {/* ===== IMPACT RING ===== */}
+          {showImpactRing && (
+            <div
+              className="absolute pointer-events-none z-25"
+              style={{
+                left: '50%',
+                top: '80%',
+                width: 60,
+                height: 60,
+                borderRadius: '50%',
+                border: '3px solid rgba(255,120,0,0.8)',
+                boxShadow: '0 0 20px rgba(255,80,0,0.5), inset 0 0 20px rgba(255,80,0,0.3)',
+                animation: 'impactRing 0.8s ease-out forwards',
+              }}
             />
           )}
+
+          {/* ===== IMPACT EMBER PARTICLES ===== */}
+          {impactParticles.map(p => (
+            <motion.div
+              key={p.id}
+              className="absolute pointer-events-none z-25"
+              style={{
+                left: `${p.x}%`,
+                top: `${p.y}%`,
+                width: p.size,
+                height: p.size,
+                borderRadius: '50%',
+                background: `radial-gradient(circle, ${p.color}, transparent)`,
+                boxShadow: `0 0 ${p.size}px ${p.color}`,
+              }}
+              initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+              animate={{ x: p.dx, y: p.dy, opacity: 0, scale: 0.3 }}
+              transition={{ duration: 0.8 + Math.random() * 0.5, ease: 'easeOut', delay: p.delay }}
+            />
+          ))}
 
           {/* Fragmentos de la estatua al colapsar */}
           {collapsed && SECTIONS_DATA.map((section, idx) => (
@@ -444,11 +637,11 @@ export default function App() {
         {showFlash && (
           <motion.div
             className="fixed inset-0 pointer-events-none z-40"
-            style={{ background: 'radial-gradient(circle at center 80%, rgba(255,255,255,0.9), transparent 60%)' }}
-            initial={{ opacity: 1 }}
-            animate={{ opacity: 0 }}
+            style={{ background: 'radial-gradient(circle at center 80%, rgba(255,140,0,0.95), rgba(255,60,0,0.6) 30%, rgba(255,255,255,0.8) 50%, transparent 70%)' }}
+            initial={{ opacity: 1, scale: 0.8 }}
+            animate={{ opacity: 0, scale: 1.5 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
+            transition={{ duration: 0.6, ease: "easeOut" }}
           />
         )}
       </AnimatePresence>
