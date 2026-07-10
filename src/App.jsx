@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, X, RotateCcw, Shield, Compass, BookOpen, Clock, Activity } from 'lucide-react';
+import { Play, X, RotateCcw, Shield, Compass, BookOpen, Clock, Activity, Box } from 'lucide-react';
+import StatueViewer3D from './StatueViewer3D';
 
 // =====================================================
 // DATA BÍBLICA E HISTÓRICA DETALLADA
@@ -151,6 +152,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null);
   const [hovered, setHovered] = useState(null);
   const [activeTab, setActiveTab] = useState('biblia');
+  const [viewMode, setViewMode] = useState('2d'); // '2d' or '3d'
 
   // Estado de la animación de la piedra
   const [stoneActive, setStoneActive] = useState(false);
@@ -345,6 +347,17 @@ export default function App() {
               <Activity size={14} /> Lanzar Piedra
             </button>
           )}
+
+          <button 
+            onClick={() => setViewMode(prev => prev === '2d' ? '3d' : '2d')}
+            className={`px-4 py-2.5 rounded text-sm font-semibold transition-all duration-300 flex items-center justify-center gap-2 backdrop-blur-md border ${
+              viewMode === '3d'
+                ? 'bg-blue-600/90 hover:bg-blue-500 text-white border-blue-400/50 shadow-[0_0_20px_rgba(59,130,246,0.4)]'
+                : 'bg-black/40 hover:bg-blue-600/80 hover:text-white border-blue-500/40 text-blue-400'
+            }`}
+          >
+            <Box size={14} /> {viewMode === '2d' ? 'Ver 3D' : 'Ver 2D'}
+          </button>
         </div>
       </header>
 
@@ -372,7 +385,20 @@ export default function App() {
         ))}
       </div>
 
-      {/* ===== ESTATUA CENTRAL (IMAGEN INTERACTIVA) ===== */}
+      {/* ===== ESTATUA CENTRAL ===== */}
+      {viewMode === '3d' ? (
+        /* ===== VISOR 3D ===== */
+        <StatueViewer3D
+          selectedId={selectedId}
+          setSelectedId={setSelectedId}
+          hovered={hovered}
+          setHovered={setHovered}
+          collapsed={collapsed}
+          stoneActive={stoneActive}
+          sections={SECTIONS_DATA}
+        />
+      ) : (
+      /* ===== ESTATUA 2D (IMAGEN INTERACTIVA) ===== */
       <div className="absolute inset-0 flex items-center justify-center z-5">
         <motion.div 
           className="relative h-[82vh] max-h-[850px]"
@@ -631,6 +657,7 @@ export default function App() {
           ))}
         </motion.div>
       </div>
+      )}
 
       {/* ===== FLASH DE IMPACTO ===== */}
       <AnimatePresence>
