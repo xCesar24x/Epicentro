@@ -1,6 +1,6 @@
-import React, { useRef, useState, useEffect, Suspense } from 'react';
+import React, { useRef, useState, useEffect, Suspense, useMemo } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { useGLTF, OrbitControls, Environment, ContactShadows, Html } from '@react-three/drei';
+import { useGLTF, OrbitControls, Environment, ContactShadows, Html, Center, Bounds } from '@react-three/drei';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import * as THREE from 'three';
 
@@ -11,27 +11,56 @@ function StatueModel({ onSectionClick, selectedId, hovered, setHovered, collapse
   const { scene } = useGLTF('/estatua_daniel2.glb');
   const modelRef = useRef();
 
+  // Log mesh names on first load for debugging
+  useEffect(() => {
+    console.log('GLB meshes found:');
+    scene.traverse((child) => {
+      if (child.isMesh) {
+        console.log(`  - Mesh: "${child.name}"`);
+      }
+    });
+  }, [scene]);
+
   // Gentle floating animation
   useFrame((state) => {
     if (modelRef.current && !collapsed) {
-      modelRef.current.position.y = Math.sin(state.clock.elapsedTime * 0.5) * 0.05;
+      modelRef.current.position.y += Math.sin(state.clock.elapsedTime * 0.5) * 0.0003;
     }
   });
 
-  // Map mesh names to section IDs
-  const meshSectionMap = {
+  // Map mesh names to section IDs — will be adjusted after seeing console logs
+  const meshSectionMap = useMemo(() => ({
     'HEAD_VOID': 0,
+    'Head_VOID': 0,
+    'head_void': 0,
     'HARMS_VOID': 1,
+    'Harms_VOID': 1,
+    'harms_void': 1,
     'BODY_VOID': 2,
+    'Body_VOID': 2,
+    'body_void': 2,
     'LEGS_VOID': 3,
+    'Legs_VOID': 3,
+    'legs_void': 3,
+    'ONLY_LEGS': 3,
     'STONE': 4,
-  };
+    'Stone': 4,
+    'stone': 4,
+  }), []);
 
   // Apply emissive glow to selected/hovered sections
   useEffect(() => {
     scene.traverse((child) => {
       if (child.isMesh) {
-        const sectionId = meshSectionMap[child.name];
+        // Try matching mesh name
+        let sectionId = undefined;
+        for (const [key, value] of Object.entries(meshSectionMap)) {
+          if (child.name.includes(key) || child.name.toLowerCase().includes(key.toLowerCase())) {
+            sectionId = value;
+            break;
+          }
+        }
+
         if (sectionId !== undefined && sections[sectionId]) {
           const section = sections[sectionId];
           const color = new THREE.Color(section.color);
@@ -54,19 +83,25 @@ function StatueModel({ onSectionClick, selectedId, hovered, setHovered, collapse
         }
       }
     });
-  }, [selectedId, hovered, scene, sections]);
+  }, [selectedId, hovered, scene, sections, meshSectionMap]);
 
   const handlePointerOver = (e) => {
     e.stopPropagation();
     const name = e.object.name;
-    const sectionId = meshSectionMap[name];
+    let sectionId = undefined;
+    for (const [key, value] of Object.entries(meshSectionMap)) {
+      if (name.includes(key) || name.toLowerCase().includes(key.toLowerCase())) {
+        sectionId = value;
+        break;
+      }
+    }
     if (sectionId !== undefined) {
       setHovered(sectionId);
       document.body.style.cursor = 'pointer';
     }
   };
 
-  const handlePointerOut = (e) => {
+  const handlePointerOut = () => {
     setHovered(null);
     document.body.style.cursor = 'default';
   };
@@ -74,7 +109,13 @@ function StatueModel({ onSectionClick, selectedId, hovered, setHovered, collapse
   const handleClick = (e) => {
     e.stopPropagation();
     const name = e.object.name;
-    const sectionId = meshSectionMap[name];
+    let sectionId = undefined;
+    for (const [key, value] of Object.entries(meshSectionMap)) {
+      if (name.includes(key) || name.toLowerCase().includes(key.toLowerCase())) {
+        sectionId = value;
+        break;
+      }
+    }
     if (sectionId !== undefined) {
       onSectionClick(sectionId);
     }
@@ -84,8 +125,6 @@ function StatueModel({ onSectionClick, selectedId, hovered, setHovered, collapse
     <group ref={modelRef}>
       <primitive 
         object={scene} 
-        scale={0.01}
-        position={[0, -1.5, 0]}
         onPointerOver={handlePointerOver}
         onPointerOut={handlePointerOut}
         onClick={handleClick}
@@ -101,8 +140,8 @@ function LoadingFallback() {
   return (
     <Html center>
       <div className="flex flex-col items-center gap-3">
-        <div className="w-10 h-10 border-2 border-gold/30 border-t-gold rounded-full animate-spin" />
-        <p className="text-gold/70 text-sm font-serif tracking-wider">Cargando modelo 3D...</p>
+        <div className="w-10 h-10 border-2 border-t-yellow-500 border-yellow-500/30 rounded-full animate-spin" />
+        <p className="text-yellow-500/70 text-sm tracking-wider">Cargando modelo 3D...</p>
       </div>
     </Html>
   );
@@ -113,57 +152,50 @@ function LoadingFallback() {
 // =====================================================
 export default function StatueViewer3D({ selectedId, setSelectedId, hovered, setHovered, collapsed, stoneActive, sections }) {
   return (
-    <div className="absolute inset-0 z-5">
+    <div className="absolute inset-0" style={{ zIndex: 5 }}>
       <Canvas
-        camera={{ position: [0, 0.5, 4], fov: 45 }}
+        camera={{ position: [0, 50, 200], fov: 45, near: 0.1, far: 10000 }}
         gl={{ antialias: true, alpha: true }}
         style={{ background: 'transparent' }}
       >
         {/* Lighting */}
-        <ambientLight intensity={0.3} />
+        <ambientLight intensity={0.5} />
         <directionalLight 
-          position={[5, 8, 5]} 
-          intensity={1.2} 
-          castShadow
+          position={[50, 80, 50]} 
+          intensity={1.5} 
           color="#fff5e0"
         />
         <directionalLight 
-          position={[-3, 4, -2]} 
-          intensity={0.4} 
+          position={[-30, 40, -20]} 
+          intensity={0.5} 
           color="#b0c4ff"
         />
-        <pointLight position={[0, 3, 2]} intensity={0.5} color="#ffd700" />
+        <pointLight position={[0, 60, 40]} intensity={0.8} color="#ffd700" />
 
         {/* Environment for realistic reflections */}
         <Environment preset="city" />
 
-        {/* 3D Statue Model */}
-        <Suspense fallback={<LoadingFallback />}>
-          <StatueModel
-            onSectionClick={(id) => !collapsed && !stoneActive && setSelectedId(id)}
-            selectedId={selectedId}
-            hovered={hovered}
-            setHovered={setHovered}
-            collapsed={collapsed}
-            sections={sections}
-          />
-        </Suspense>
-
-        {/* Contact shadow below the statue */}
-        <ContactShadows
-          position={[0, -1.5, 0]}
-          opacity={0.4}
-          scale={8}
-          blur={2}
-          far={4}
-          color="#d4af37"
-        />
+        {/* Auto-center and auto-fit the model */}
+        <Bounds fit clip observe margin={1.4}>
+          <Suspense fallback={<LoadingFallback />}>
+            <Center>
+              <StatueModel
+                onSectionClick={(id) => !collapsed && !stoneActive && setSelectedId(id)}
+                selectedId={selectedId}
+                hovered={hovered}
+                setHovered={setHovered}
+                collapsed={collapsed}
+                sections={sections}
+              />
+            </Center>
+          </Suspense>
+        </Bounds>
 
         {/* Orbit controls for user interaction */}
         <OrbitControls
           enablePan={false}
-          minDistance={2}
-          maxDistance={7}
+          minDistance={50}
+          maxDistance={500}
           minPolarAngle={Math.PI / 6}
           maxPolarAngle={Math.PI / 1.8}
           autoRotate={!selectedId && !collapsed}
